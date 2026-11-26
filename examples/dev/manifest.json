@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "channel": "dev",
+  "published": "2026-12-02T09:00:00Z",
+  "sequence": 1,
+  "expires": "2027-01-01T09:00:00Z",
+  "sets": [
+    {
+      "id": "0.9.49-dev.1",
+      "format_change": false,
+      "requires_data_dir": "same",
+      "components": {
+        "cmns": {
+          "version": "0.9.49-dev.1",
+          "commit": "7c1e0a3f5d2b9e84a6c1f0d3b2a5e7c9d8f6a4b1",
+          "assets": {
+            "aarch64-apple-darwin": {
+              "url": "https://github.com/dhiway/commons-releases/releases/download/v0.9.49-dev.1/cmns-0.9.49-dev.1-aarch64-apple-darwin.tar.gz",
+              "sha256": "a28286354ed517d49a63b73a6312a5ec186d590ad203ca78dc2af53a6b1fa6c9",
+              "size": 4014811
+            },
+            "x86_64-unknown-linux-musl": {
+              "url": "https://github.com/dhiway/commons-releases/releases/download/v0.9.49-dev.1/cmns-0.9.49-dev.1-x86_64-unknown-linux-musl.tar.gz",
+              "sha256": "d71deebffdb9c79ad9d2137cca6cc07de1904dce1b8711bfa30235be343f391f",
+              "size": 4120336
+            }
+          }
+        },
+        "node": {
+          "version": "0.9.49-dev.1",
+          "commit": "3e8b6d1c0f9a2e7d5b4c3a1f0e9d8c7b6a5f4e3d",
+          "assets": {
+            "aarch64-apple-darwin": {
+              "url": "https://github.com/dhiway/commons-releases/releases/download/v0.9.49-dev.1/cmn-0.9.49-dev.1-aarch64-apple-darwin.tar.gz",
+              "sha256": "9c9a4ef33627ae0d8779ab111a121bc2d1d4a576d025fd96d875bc0f91b47596",
+              "size": 31800000
+            },
+            "x86_64-unknown-linux-musl": {
+              "url": "https://github.com/dhiway/commons-releases/releases/download/v0.9.49-dev.1/cmn-0.9.49-dev.1-x86_64-unknown-linux-musl.tar.gz",
+              "sha256": "6c90df81208284342e143b36189d0e81f2531ec98142b5981e94907f9fa7bfcc",
+              "size": 31801013
+            }
+          },
+          "storage_format": 14,
+          "sync_alpn": "/origin/sync/12"
+        }
+      },
+      "notes_url": "https://github.com/dhiway/commons-releases/releases/tag/v0.9.49-dev.1",
+      "build_profile": "release: lto=true, codegen-units=1, strip=true"
+    }
+  ]
+}

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/dhiway/commons-releases/schema/manifest.schema.json",
   "title": "Commons release channel manifest, schema 1",
-  "description": "docs/manifest.md is the written grammar. Rules JSON Schema cannot state are enforced by the verifier: cmns.version equals node.version in every set; requires_data_dir is \"new\" exactly when format_change is true; set ids and asset file names are unique; expires is later than published.",
+  "description": "docs/manifest.md is the written grammar. Rules this schema does not state are enforced by the verifier: cmns.version equals node.version in every set; set ids and asset file names are unique; an asset URL's file name is not . or ..; expires is later than published.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "channel", "published", "sequence", "expires", "sets"],
@@ -19,6 +19,9 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "format_change", "requires_data_dir", "components", "notes_url", "build_profile"],
+      "if": { "properties": { "format_change": { "const": true } } },
+      "then": { "properties": { "requires_data_dir": { "const": "new" } } },
+      "else": { "properties": { "requires_data_dir": { "const": "same" } } },
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "format_change": { "type": "boolean" },
@@ -34,7 +37,7 @@
           }
         },
         "notes_url": { "$ref": "#/$defs/https_url" },
-        "build_profile": { "type": "string", "pattern": "^release" }
+        "build_profile": { "const": "release: lto=true, codegen-units=1, strip=true" }
       }
     },
     "component": {

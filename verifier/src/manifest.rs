@@ -12,6 +12,11 @@ use time::OffsetDateTime;
 pub const SCHEMA: u32 = 1;
 /// The channels a manifest may name.
 pub const CHANNELS: [&str; 3] = ["dev", "beta", "stable"];
+/// The only `build_profile` a set may carry. `scripts/build-cmns.sh` writes
+/// it only after checking the whole release profile: these three settings,
+/// opt-level 3, debug assertions and overflow checks off, no per-package
+/// override and no profile from a Cargo config file.
+pub const RELEASE_PROFILE: &str = "release: lto=true, codegen-units=1, strip=true";
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -142,9 +147,9 @@ pub fn check_schema(m: &Manifest) -> Result<(), String> {
             }
         }
         https_url(&set.notes_url).map_err(|e| format!("{at}: notes_url {e}"))?;
-        if !set.build_profile.starts_with("release") {
+        if set.build_profile != RELEASE_PROFILE {
             return Err(format!(
-                "{at}: build_profile {:?} is not a release profile; every release is an optimised build",
+                "{at}: build_profile {:?} is not {RELEASE_PROFILE:?}; every release is an optimised build",
                 set.build_profile
             ));
         }

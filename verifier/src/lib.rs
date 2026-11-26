@@ -9,7 +9,8 @@
 //!    parsed before this passes.
 //! 2. [`Check::Schema`]: the JSON is a schema-1 manifest (`docs/manifest.md`).
 //! 3. [`Check::Channel`]: the manifest names the channel the caller asked for.
-//! 4. [`Check::Published`]: `published` is not in the future.
+//! 4. [`Check::Published`]: `published` is no more than
+//!    [`PUBLISHED_ALLOWANCE`] (one hour) ahead of `now`.
 //! 5. [`Check::Expires`]: `expires` is in the future.
 //! 6. [`Check::Sequence`]: `sequence` is not lower than the last one seen.
 //! 7. [`Check::SetVersion`]: in every set, `cmns` and the node have one version.
@@ -189,9 +190,20 @@ fn check_channel(m: &Manifest, expected: Option<&str>) -> Result<(), String> {
     }
 }
 
+/// How far `published` may lie ahead of the caller's clock. A manifest is
+/// published at the moment it is signed, so a client whose clock is a little
+/// behind would otherwise refuse every fresh manifest. The check exists to
+/// catch a wrong date from the signer, not an attacker: without the key no
+/// one can sign, and `sequence` and `expires` give freshness. An hour covers
+/// a drifted or freshly woken machine and still catches a wrong day or year.
+pub const PUBLISHED_ALLOWANCE: time::Duration = time::Duration::hours(1);
+
 fn check_published(m: &Manifest, now: OffsetDateTime) -> Result<(), String> {
-    if manifest::timestamp("published", &m.published)? > now {
-        return Err(format!("published {} is in the future", m.published));
+    if manifest::timestamp("published", &m.published)? > now.saturating_add(PUBLISHED_ALLOWANCE) {
+        return Err(format!(
+            "published {} is more than {PUBLISHED_ALLOWANCE} ahead of this clock ({now})",
+            m.published
+        ));
     }
     Ok(())
 }

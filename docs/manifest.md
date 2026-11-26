@@ -23,7 +23,7 @@ number and a client that reads it.
 manifest      = {
   "schema":    1,                        always 1
   "channel":   "dev" | "beta" | "stable",
-  "published": TIMESTAMP,                when it was signed; not in the future
+  "published": TIMESTAMP,                when it was signed; at most an hour ahead of the client's clock
   "sequence":  INTEGER >= 0,             one higher than the channel's previous manifest
   "expires":   TIMESTAMP,                later than published; clients refuse it after this
   "sets":      [ set, ... ]              at least one
@@ -38,7 +38,7 @@ set           = {
     "app":  component                    optional
   },
   "notes_url":     HTTPS_URL,            the release notes
-  "build_profile": STRING                starts with "release", e.g.
+  "build_profile": STRING                exactly
                                          "release: lto=true, codegen-units=1, strip=true"
 }
 component     = {
@@ -68,7 +68,17 @@ TIMESTAMP     = RFC 3339, e.g. 2026-12-01T10:00:00Z
   does.
 - Every asset's file name (the URL's last path segment) is unique in the
   manifest, because a client stores and checks assets by that name.
-- Every set is a release-profile build.
+- Every set is a release-profile build: `build_profile` is exactly the
+  string above, which `scripts/build-cmns.sh` writes only after checking the
+  whole profile ([building.md](building.md#what-it-refuses)). A string that
+  merely starts with `release` is refused.
+- `published` may be up to one hour ahead of the client's clock
+  (`PUBLISHED_ALLOWANCE` in `verifier/src/lib.rs`). A manifest is published
+  the moment it is signed, so without an allowance a client whose clock is a
+  little behind refuses every fresh one. The check is there to catch a wrong
+  date from the signer; it is not what stops an old or forged manifest
+  (the signature, `sequence` and `expires` do that), so an hour costs no
+  protection and still catches a wrong day or year.
 
 ## Freshness
 
@@ -81,8 +91,9 @@ before it expires even when nothing new is released. Suggested lifetimes:
 
 ## Examples
 
-`examples/beta/manifest.json` (one set, with the App) and
-`examples/stable/manifest.json` (two sets, the second a format change). Their
+`examples/dev/manifest.json` (one set, `cmns` and the node only, with a
+prerelease version), `examples/beta/manifest.json` (one set, with the App)
+and `examples/stable/manifest.json` (two sets, the second a format change). Their
 hashes, sizes and commits are made up. The tests sign each with a throwaway
 key and verify it.
 

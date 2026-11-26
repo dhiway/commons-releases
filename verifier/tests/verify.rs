@@ -127,10 +127,21 @@ fn an_expired_manifest_fails() {
 }
 
 #[test]
-fn a_manifest_published_in_the_future_fails() {
+fn a_manifest_published_more_than_an_hour_ahead_fails() {
+    let mut m = manifest();
+    m["published"] = json!("2026-12-01T01:00:01Z");
+    assert_eq!(failed_check(run(&m)), Check::Published);
+}
+
+/// A client whose clock is up to an hour behind the signer's still accepts a
+/// manifest signed just now.
+#[test]
+fn a_manifest_published_up_to_an_hour_ahead_verifies() {
     let mut m = manifest();
     m["published"] = json!("2026-12-01T00:00:01Z");
-    assert_eq!(failed_check(run(&m)), Check::Published);
+    run(&m).unwrap();
+    m["published"] = json!("2026-12-01T01:00:00Z");
+    run(&m).unwrap();
 }
 
 #[test]
@@ -209,6 +220,105 @@ fn a_build_that_is_not_the_release_profile_fails() {
     assert_eq!(failed_check(run(&m)), Check::Schema);
 }
 
+/// Only the exact string `build-cmns.sh` writes is accepted: one that starts
+/// with "release" but says, or hides, something else is not.
+#[test]
+fn a_build_profile_that_only_starts_with_release_fails() {
+    for profile in [
+        "release",
+        "release: opt-level=0, debug-assertions=true",
+        "release: lto=true, codegen-units=1, strip=true, opt-level=0",
+        "release: lto=true, codegen-units=1, strip=false",
+    ] {
+        let mut m = manifest();
+        m["sets"][0]["build_profile"] = json!(profile);
+        assert_eq!(failed_check(run(&m)), Check::Schema, "{profile:?}");
+    }
+    assert_eq!(
+        manifest()["sets"][0]["build_profile"],
+        commons_release_verify::manifest::RELEASE_PROFILE
+    );
+}
+
+#[test]
+fn a_new_data_directory_without_a_format_change_fails() {
+    let mut m = manifest();
+    m["sets"][0]["requires_data_dir"] = json!("new");
+    assert_eq!(failed_check(run(&m)), Check::Schema);
+}
+
+/// Two assets stored under one file name, in different components.
+#[test]
+fn two_assets_with_one_file_name_fail() {
+    let mut m = manifest();
+    let cmns_url = m["sets"][0]["components"]["cmns"]["assets"]["aarch64-apple-darwin"]["url"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let other = cmns_url.replace("/v0.9.48/", "/v0.9.48-copy/");
+    m["sets"][0]["components"]["node"]["assets"]["x86_64-unknown-linux-musl"]["url"] = json!(other);
+    assert_eq!(failed_check(run(&m)), Check::Schema);
+}
+
+#[test]
+fn an_asset_url_ending_in_a_dot_segment_fails() {
+    for name in [".", ".."] {
+        let mut m = manifest();
+        m["sets"][0]["components"]["cmns"]["assets"]["aarch64-apple-darwin"]["url"] =
+            json!(format!("https://github.com/dhiway/commons-releases/{name}"));
+        assert_eq!(failed_check(run(&m)), Check::Schema, "{name:?}");
+    }
+}
+
+/// `expires` not after `published` is a schema error, whatever the clock:
+/// with `expires` equal to `published`, before `now`, the expiry check would
+/// also refuse it, so the test names the check that must catch it first.
+#[test]
+fn expires_not_after_published_fails() {
+    let mut m = manifest();
+    m["expires"] = m["published"].clone();
+    assert_eq!(failed_check(run(&m)), Check::Schema);
+}
+
+#[test]
+fn a_schema_number_other_than_1_fails() {
+    for schema in [0, 2] {
+        let mut m = manifest();
+        m["schema"] = json!(schema);
+        assert_eq!(failed_check(run(&m)), Check::Schema, "schema {schema}");
+    }
+}
+
+#[test]
+fn two_sets_with_one_id_fail() {
+    let mut m = manifest();
+    let mut second = m["sets"][0].clone();
+    // Its own asset file names, so only the set id repeats.
+    for (comp, platform) in [
+        ("cmns", "aarch64-apple-darwin"),
+        ("node", "x86_64-unknown-linux-musl"),
+    ] {
+        let url = &mut second["components"][comp]["assets"][platform]["url"];
+        *url = json!(url.as_str().unwrap().replace("0.9.48-", "0.9.48-b-"));
+    }
+    m["sets"].as_array_mut().unwrap().push(second);
+    assert_eq!(failed_check(run(&m)), Check::Schema);
+}
+
+#[test]
+fn a_commit_that_is_not_40_lowercase_hex_fails() {
+    for commit in [
+        "ABCDEF1111111111111111111111111111111111",  // uppercase
+        "111111111111111111111111111111111111111",   // 39 digits
+        "11111111111111111111111111111111111111111", // 41 digits
+        "g111111111111111111111111111111111111111",  // not hex
+    ] {
+        let mut m = manifest();
+        m["sets"][0]["components"]["node"]["commit"] = json!(commit);
+        assert_eq!(failed_check(run(&m)), Check::Schema, "{commit:?}");
+    }
+}
+
 #[test]
 fn an_unknown_field_fails() {
     let mut m = manifest();
@@ -229,7 +339,7 @@ fn an_asset_url_that_is_not_https_fails() {
 #[test]
 fn the_example_manifests_verify() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples");
-    for channel in ["beta", "stable"] {
+    for channel in ["dev", "beta", "stable"] {
         let b = std::fs::read(root.join(channel).join("manifest.json")).unwrap();
         let m: Value = serde_json::from_slice(&b).unwrap();
         let key = TestKey::hardware("example", 0x01);
