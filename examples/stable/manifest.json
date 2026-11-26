@@ -1,0 +1,119 @@
+{
+  "schema": 1,
+  "channel": "stable",
+  "published": "2027-03-01T10:00:00Z",
+  "sequence": 1,
+  "expires": "2027-04-01T10:00:00Z",
+  "sets": [
+    {
+      "id": "1.0.0",
+      "format_change": false,
+      "requires_data_dir": "same",
+      "components": {
+        "cmns": {
+          "version": "1.0.0",
+          "commit": "84c6518abcadb37e160d6e3093a4d4cbc53582d9",
+          "assets": {
+            "aarch64-apple-darwin": {
+              "url": "https://github.com/dhiway/commons-releases/releases/download/v1.0.0/cmns-1.0.0-aarch64-apple-darwin.tar.gz",
+              "sha256": "79900ee3ee9a3ed9d83cad97f14bb669a7a251592ca1d371ff057ec6d5d60c56",
+              "size": 9400000
+            },
+            "x86_64-unknown-linux-musl": {
+              "url": "https://github.com/dhiway/commons-releases/releases/download/v1.0.0/cmns-1.0.0-x86_64-unknown-linux-musl.tar.gz",
+              "sha256": "197b051167e3a2cf279dcd26c4aff993bbc6d4af4acfc54f9a4af8fa968913e9",
+              "size": 9401013
+            }
+          }
+        },
+        "node": {
+          "version": "1.0.0",
+          "commit": "4deea9c913ea0d0654fe951752fed02ffe3dcdd3",
+          "assets": {
+            "aarch64-apple-darwin": {
+              "url": "https://github.com/dhiway/commons-releases/releases/download/v1.0.0/cmn-1.0.0-aarch64-apple-darwin.tar.gz",
+              "sha256": "ffa61434649d6e682e3b1f0385fd6a141de952c69a67ab3ecded70706113d426",
+              "size": 31800000
+            },
+            "x86_64-unknown-linux-musl": {
+              "url": "https://github.com/dhiway/commons-releases/releases/download/v1.0.0/cmn-1.0.0-x86_64-unknown-linux-musl.tar.gz",
+              "sha256": "b4504ea4d4f490474d094f89a7741991b3f6c8505a17cdcd22d69c2821e81c7f",
+              "size": 31801013
+            },
+            "aarch64-unknown-linux-musl": {
+              "url": "https://github.com/dhiway/commons-releases/releases/download/v1.0.0/cmn-1.0.0-aarch64-unknown-linux-musl.tar.gz",
+              "sha256": "989f4bc28b650847148614bf2f78cce7fb4d12d531a142b0ca46b3b71ae2699e",
+              "size": 31802026
+            }
+          },
+          "storage_format": 15,
+          "sync_alpn": "/origin/sync/13",
+          "notarized": true
+        }
+      },
+      "notes_url": "https://github.com/dhiway/commons-releases/releases/tag/v1.0.0",
+      "build_profile": "release: lto=true, codegen-units=1, strip=true"
+    },
+    {
+      "id": "1.1.0",
+      "format_change": true,
+      "requires_data_dir": "new",
+      "components": {
+        "cmns": {
+          "version": "1.1.0",
+          "commit": "0d79b66bab5ec04429807d24c77523657fbe4416",
+          "assets": {
+            "aarch64-apple-darwin": {
+              "url": "https://github.com/dhiway/commons-releases/releases/download/v1.1.0/cmns-1.1.0-aarch64-apple-darwin.tar.gz",
+              "sha256": "e506aed595b6b53d890f8da43670fcbe940c5bb5591385505f7814e26fb58234",
+              "size": 9400000
+            },
+            "x86_64-unknown-linux-musl": {
+              "url": "https://github.com/dhiway/commons-releases/releases/download/v1.1.0/cmns-1.1.0-x86_64-unknown-linux-musl.tar.gz",
+              "sha256": "c9d142f7dc868c0dce7d609f04bf723dced8c3a311246b3a6b463c0c2040915e",
+              "size": 9401013
+            }
+          }
+        },
+        "node": {
+          "version": "1.1.0",
+          "commit": "4f52605378fc82fc9d27682f8b9a6d1f25ccc293",
+          "assets": {
+            "aarch64-apple-darwin": {
+              "url": "https://github.com/dhiway/commons-releases/releases/download/v1.1.0/cmn-1.1.0-aarch64-apple-darwin.tar.gz",
+              "sha256": "61e2519652a13d601805263beb7775e6651f3b1afac9fb8225ac80d8ba2820e9",
+              "size": 31800000
+            },
+            "x86_64-unknown-linux-musl": {
+              "url": "https://github.com/dhiway/commons-releases/releases/download/v1.1.0/cmn-1.1.0-x86_64-unknown-linux-musl.tar.gz",
+              "sha256": "23a9f36bcbd5d230dff908cadfd6f3dbba7a57646dada08c703f6f88cd46badc",
+              "size": 31801013
+            },
+            "aarch64-unknown-linux-musl": {
+              "url": "https://github.com/dhiway/commons-releases/releases/download/v1.1.0/cmn-1.1.0-aarch64-unknown-linux-musl.tar.gz",
+              "sha256": "bb5d76fc5d0b1d88351813cbcda6f9ac1b5ef46fa4844c5cb9d2ce7ceb949e01",
+              "size": 31802026
+            }
+          },
+          "storage_format": 16,
+          "sync_alpn": "/origin/sync/13",
+          "notarized": true
+        },
+        "app": {
+          "version": "1.1.0",
+          "commit": "da812d8dcd6227d2b343f5b0ced6487f46a08e65",
+          "assets": {
+            "universal-apple-darwin": {
+              "url": "https://github.com/dhiway/commons-releases/releases/download/v1.1.0/Commons-1.1.0.dmg",
+              "sha256": "6ca0b69c3a9a1fa488d799ee0afe8ef8b7f493d8cf71edaaef993d5f7b624379",
+              "size": 48200000
+            }
+          },
+          "notarized": true
+        }
+      },
+      "notes_url": "https://github.com/dhiway/commons-releases/releases/tag/v1.1.0",
+      "build_profile": "release: lto=true, codegen-units=1, strip=true"
+    }
+  ]
+}

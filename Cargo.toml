@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = ["verifier"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.99.0"
+license = "Apache-2.0"
+
+# Release binaries are optimised (owner ruling 2026-11-20).
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

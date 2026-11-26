@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dhiway/commons-releases/schema/manifest.schema.json",
+  "title": "Commons release channel manifest, schema 1",
+  "description": "docs/manifest.md is the written grammar. Rules JSON Schema cannot state are enforced by the verifier: cmns.version equals node.version in every set; requires_data_dir is \"new\" exactly when format_change is true; set ids and asset file names are unique; expires is later than published.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "channel", "published", "sequence", "expires", "sets"],
+  "properties": {
+    "schema": { "const": 1 },
+    "channel": { "enum": ["dev", "beta", "stable"] },
+    "published": { "type": "string", "format": "date-time" },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "expires": { "type": "string", "format": "date-time" },
+    "sets": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/set" } }
+  },
+  "$defs": {
+    "set": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "format_change", "requires_data_dir", "components", "notes_url", "build_profile"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "format_change": { "type": "boolean" },
+        "requires_data_dir": { "enum": ["new", "same"] },
+        "components": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cmns", "node"],
+          "properties": {
+            "cmns": { "$ref": "#/$defs/component" },
+            "node": { "$ref": "#/$defs/component" },
+            "app": { "$ref": "#/$defs/component" }
+          }
+        },
+        "notes_url": { "$ref": "#/$defs/https_url" },
+        "build_profile": { "type": "string", "pattern": "^release" }
+      }
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "commit", "assets"],
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?$"
+        },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "assets": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "pattern": "^[a-z0-9_-]+$" },
+          "additionalProperties": { "$ref": "#/$defs/asset" }
+        },
+        "storage_format": { "type": "integer", "minimum": 0 },
+        "sync_alpn": { "type": "string" },
+        "notarized": { "type": "boolean" }
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "sha256", "size"],
+      "properties": {
+        "url": { "$ref": "#/$defs/https_url" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "size": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "https_url": { "type": "string", "pattern": "^https://\\S+$" }
+  }
+}

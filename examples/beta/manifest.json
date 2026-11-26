@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "channel": "beta",
+  "published": "2026-12-01T10:00:00Z",
+  "sequence": 1,
+  "expires": "2026-12-31T10:00:00Z",
+  "sets": [
+    {
+      "id": "0.9.48",
+      "format_change": false,
+      "requires_data_dir": "same",
+      "components": {
+        "cmns": {
+          "version": "0.9.48",
+          "commit": "6c2560ad11420d017abb8c38f9f54c4e416cd09b",
+          "assets": {
+            "aarch64-apple-darwin": {
+              "url": "https://github.com/dhiway/commons-releases/releases/download/v0.9.48/cmns-0.9.48-aarch64-apple-darwin.tar.gz",
+              "sha256": "86e5f7907d8acd3320c83c17d28bbd91cb6156954d4d53755b1562f6ccbe9e51",
+              "size": 9400000
+            },
+            "x86_64-unknown-linux-musl": {
+              "url": "https://github.com/dhiway/commons-releases/releases/download/v0.9.48/cmns-0.9.48-x86_64-unknown-linux-musl.tar.gz",
+              "sha256": "903c719cd4c9012b928b2b12e3d3a9753cdf49b0142c5235053ca7ff50630630",
+              "size": 9401013
+            }
+          }
+        },
+        "node": {
+          "version": "0.9.48",
+          "commit": "6ac197d4a0ae686f520f74e311c64d79a77a27ff",
+          "assets": {
+            "aarch64-apple-darwin": {
+              "url": "https://github.com/dhiway/commons-releases/releases/download/v0.9.48/cmn-0.9.48-aarch64-apple-darwin.tar.gz",
+              "sha256": "b7663cb9e2daf17b4a29d63fc938dd23f73f94e877bee56f17570c07a5ad129c",
+              "size": 31800000
+            },
+            "x86_64-unknown-linux-musl": {
+              "url": "https://github.com/dhiway/commons-releases/releases/download/v0.9.48/cmn-0.9.48-x86_64-unknown-linux-musl.tar.gz",
+              "sha256": "29d49c5fd1b2c65436b5ae6bd436a46c82923cb7c6dce7b144ce0206728747e4",
+              "size": 31801013
+            },
+            "aarch64-unknown-linux-musl": {
+              "url": "https://github.com/dhiway/commons-releases/releases/download/v0.9.48/cmn-0.9.48-aarch64-unknown-linux-musl.tar.gz",
+              "sha256": "2ea436a9e8a61afede7025139fd31d550b326b29a41ec5f0df11d69b3e5cd2f5",
+              "size": 31802026
+            }
+          },
+          "storage_format": 14,
+          "sync_alpn": "/origin/sync/12",
+          "notarized": true
+        },
+        "app": {
+          "version": "0.9.48",
+          "commit": "5e9ee5140d60eddd10691f1f80a673d7890f9878",
+          "assets": {
+            "universal-apple-darwin": {
+              "url": "https://github.com/dhiway/commons-releases/releases/download/v0.9.48/Commons-0.9.48.dmg",
+              "sha256": "90335dda614ae477bca8dfc683d61dafac9732d2a55c37bc128da06dd995ecb6",
+              "size": 48200000
+            }
+          },
+          "notarized": true
+        }
+      },
+      "notes_url": "https://github.com/dhiway/commons-releases/releases/tag/v0.9.48",
+      "build_profile": "release: lto=true, codegen-units=1, strip=true"
+    }
+  ]
+}

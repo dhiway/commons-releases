@@ -1,0 +1,26 @@
+[package]
+name = "commons-release-verify"
+description = "Offline verifier for Commons release manifests: signature, freshness, sequence, the set rule and asset hashes"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+name = "commons_release_verify"
+path = "src/lib.rs"
+
+[[bin]]
+name = "commons-release-verify"
+path = "src/main.rs"
+
+# Every dependency is already in the commons-cli lockfile at this version, so a
+# consumer (cmns) adds no new crate by depending on this one.
+[dependencies]
+base64 = "0.23.1"
+ed25519-dalek = { version = "3.0.0", default-features = false }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sha2 = "0.11.1"
+time = { version = "0.3.55", default-features = false, features = ["std", "parsing"] }
