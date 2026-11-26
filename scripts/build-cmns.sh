@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds the cmns release archives for one commit of commons-cli.
 #
-#   scripts/build-cmns.sh --src DIR --commit REV --out DIR [--target TRIPLE]... [--offline]
+#   scripts/build-cmns.sh --src DIR --commit REV --out DIR [--target TRIPLE]... [--offline] [--note TEXT]
 #
 # --src      a clone of commons-cli; nothing in it is written to
 # --commit   the commit to build; its tree is exported with `git archive`, so
@@ -11,6 +11,9 @@
 # --target   a target triple to build for, native to this host's OS (repeat;
 #            default: the host's own release target, see below)
 # --offline  pass --offline to cargo (the AWS builder has no network)
+# --note     a line recorded as "note" in BUILD-INFO.json, for a build that is
+#            not a release (for example, a proof from an unreviewed head);
+#            leave it out for a release
 #
 # For each target it runs `cargo build --locked --release -p cmns --target T`
 # and packs `cmns-<version>-<target>.tar.gz` holding `cmns` and BUILD-INFO.json.
@@ -61,7 +64,7 @@ set -euo pipefail
 
 die() { echo "build-cmns: $*" >&2; exit 1; }
 
-SRC='' COMMIT='' OUT=''
+SRC='' COMMIT='' OUT='' NOTE=''
 OFFLINE=()
 TARGETS=()
 while [ $# -gt 0 ]; do
@@ -71,6 +74,7 @@ while [ $# -gt 0 ]; do
     --out) OUT=$2; shift 2 ;;
     --target) TARGETS+=("$2"); shift 2 ;;
     --offline) OFFLINE=(--offline); shift ;;
+    --note) NOTE=$2; shift 2 ;;
     -h|--help) sed -n '2,/^set -euo/p' "$0" | sed '$d'; exit 0 ;;
     *) die "unknown argument $1" ;;
   esac
@@ -145,12 +149,15 @@ for t in "${TARGETS[@]}"; do
     # The binary must report the version the archive is named for.
     "$BIN" version | python3 -c 'import json,sys; v=json.load(sys.stdin)["cmns"]; sys.exit(0 if v==sys.argv[1] else "cmns reports "+v+", expected "+sys.argv[1])' "$VERSION"
   fi
-  python3 - "$OUT" "$t" "$VERSION" "$SHA" "$EPOCH" "$PROFILE_LINE" "$RUSTC_V" "$BIN" <<'PY'
+  python3 - "$OUT" "$t" "$VERSION" "$SHA" "$EPOCH" "$PROFILE_LINE" "$RUSTC_V" "$BIN" "$NOTE" <<'PY'
 import gzip, io, json, sys, tarfile
-out, target, version, commit, epoch, profile, rustc, binary = sys.argv[1:]
+out, target, version, commit, epoch, profile, rustc, binary, note = sys.argv[1:]
 stem = f"cmns-{version}-{target}"
-info = json.dumps({"component": "cmns", "version": version, "commit": commit, "target": target,
-                   "build_profile": profile, "rustc": rustc}, indent=2).encode() + b"\n"
+meta = {"component": "cmns", "version": version, "commit": commit, "target": target,
+        "build_profile": profile, "rustc": rustc}
+if note:
+    meta["note"] = note
+info = json.dumps(meta, indent=2).encode() + b"\n"
 def add(tar, name, data, mode):
     ti = tarfile.TarInfo(f"{stem}/{name}")
     ti.size, ti.mode, ti.mtime = len(data), mode, int(epoch)
