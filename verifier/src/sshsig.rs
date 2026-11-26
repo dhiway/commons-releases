@@ -42,6 +42,26 @@ pub enum PublicKey {
 }
 
 impl PublicKey {
+    /// Reads a key file as published under `keys/`: the first line that is
+    /// not blank and not a `#` comment is the key, in [`Self::from_openssh`]
+    /// form. A client that compiles its keys in can pass the file's text to
+    /// [`Self::from_key_text`] instead.
+    pub fn read_file(path: &std::path::Path) -> Result<Self, String> {
+        let text = std::fs::read_to_string(path)
+            .map_err(|e| format!("reading {}: {e}", path.display()))?;
+        Self::from_key_text(&text).map_err(|e| format!("{}: {e}", path.display()))
+    }
+
+    /// Parses a key file's text; see [`Self::read_file`].
+    pub fn from_key_text(text: &str) -> Result<Self, String> {
+        let line = text
+            .lines()
+            .map(str::trim)
+            .find(|l| !l.is_empty() && !l.starts_with('#'))
+            .ok_or("the key file holds no public key")?;
+        Self::from_openssh(line)
+    }
+
     /// Parses one line of an OpenSSH `.pub` file: `<type> <base64> [comment]`.
     pub fn from_openssh(line: &str) -> Result<Self, String> {
         let mut fields = line.split_whitespace();

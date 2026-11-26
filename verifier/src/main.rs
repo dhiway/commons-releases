@@ -90,17 +90,6 @@ fn parse_args() -> Result<Option<Args>, String> {
     }))
 }
 
-fn read_key(path: &PathBuf) -> Result<PublicKey, String> {
-    let text =
-        std::fs::read_to_string(path).map_err(|e| format!("reading {}: {e}", path.display()))?;
-    let line = text
-        .lines()
-        .map(str::trim)
-        .find(|l| !l.is_empty() && !l.starts_with('#'))
-        .ok_or_else(|| format!("{} holds no public key", path.display()))?;
-    PublicKey::from_openssh(line).map_err(|e| format!("{}: {e}", path.display()))
-}
-
 fn run() -> Result<ExitCode, String> {
     let Some(args) = parse_args().map_err(|e| format!("{e}\n\n{USAGE}"))? else {
         println!("{USAGE}");
@@ -110,8 +99,12 @@ fn run() -> Result<ExitCode, String> {
         .map_err(|e| format!("reading {}: {e}", args.manifest.display()))?;
     let signature = std::fs::read_to_string(&args.signature)
         .map_err(|e| format!("reading {}: {e}", args.signature.display()))?;
-    let current = read_key(&args.keys[0])?;
-    let next = args.keys.get(1).map(read_key).transpose()?;
+    let current = PublicKey::read_file(&args.keys[0])?;
+    let next = args
+        .keys
+        .get(1)
+        .map(|p| PublicKey::read_file(p))
+        .transpose()?;
     let keys = TrustedKeys { current, next };
     let now = match &args.now {
         Some(t) => OffsetDateTime::parse(t, &Rfc3339).map_err(|e| format!("--now {t:?}: {e}"))?,

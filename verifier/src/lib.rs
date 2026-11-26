@@ -18,6 +18,26 @@
 //!    [`Check::AssetsAbsent`] if a directory was given and holds none of them.
 //!
 //! No check touches the network.
+//!
+//! # Using it from a client
+//!
+//! `cmns` pins this crate over `https://` at a full commit, so what follows is
+//! its interface; `tests/client.rs` exercises it the same way.
+//!
+//! - Keys: [`PublicKey::read_file`] reads a `keys/*.pub` file, and
+//!   [`PublicKey::from_key_text`] parses one compiled into the client. Put
+//!   them in [`TrustedKeys`] (`current`, and `next` during a rotation).
+//! - Checks: [`verify`] takes the manifest's bytes, the signature file's text
+//!   and [`Options`] (`channel`, `last_sequence`, `assets_dir` for downloaded
+//!   assets, and `now`). A failure is [`Error::Failed`] carrying a [`Check`] to
+//!   match on, with [`Check::as_str`] as its printable name; [`Error::Io`]
+//!   means an asset could not be read.
+//! - The result: [`Verified::manifest`] is a [`Manifest`] whose
+//!   [`sets`](Manifest::sets) give each [`manifest::Set`]'s `format_change`,
+//!   `requires_data_dir` and `components` (`cmns`, `node`, optional `app`),
+//!   each a [`manifest::Component`] with `version`, `commit` and `assets`
+//!   keyed by target triple, each a [`manifest::Asset`] with `url`, `sha256`
+//!   and `size`.
 
 pub mod manifest;
 pub mod sshsig;
