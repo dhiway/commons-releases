@@ -201,28 +201,43 @@ fn git(dir: &Path, args: &[&str]) {
     assert_eq!(code, 0, "git {args:?}: {out}");
 }
 
+/// Runs `build-cmns.sh` on a one-commit repository holding `cargo_toml`,
+/// with `bin` first on `PATH` when given.
+fn build_cmns(root: &Path, cargo_toml: &str, bin: Option<&Path>) -> (i32, String) {
+    let src = root.join("src");
+    write(&src.join("Cargo.toml"), cargo_toml);
+    git(&src, &["init", "-q"]);
+    git(&src, &["add", "Cargo.toml"]);
+    git(&src, &["commit", "-qm", "a workspace"]);
+    let home = root.join("cargo-home");
+    std::fs::create_dir_all(&home).unwrap();
+    let mut cmd = Command::new("bash");
+    cmd.arg(scripts().join("build-cmns.sh"))
+        .args(["--src", src.to_str().unwrap(), "--commit", "HEAD", "--out"])
+        .arg(root.join("out"))
+        .env("CARGO_HOME", &home)
+        .env_remove("RUSTFLAGS")
+        .env_remove("CARGO_ENCODED_RUSTFLAGS")
+        // On Linux the script wants musl-gcc unless CC_<target> is set.
+        .env("CC_x86_64_unknown_linux_musl", "cc")
+        .env("CC_aarch64_unknown_linux_musl", "cc");
+    if let Some(bin) = bin {
+        let path = std::env::var("PATH").unwrap_or_default();
+        cmd.env("PATH", format!("{}:{path}", bin.display()));
+    }
+    run(&mut cmd)
+}
+
 /// `build-cmns.sh` runs the profile check on the commit it builds and stops
 /// before cargo runs.
 #[test]
 fn build_cmns_refuses_a_weakened_profile_before_building() {
     let root = scratch("build-cmns-weak");
-    let src = root.join("src");
-    write(
-        &src.join("Cargo.toml"),
+    let (code, out) = build_cmns(
+        &root,
         &format!("{GOOD_PROFILE}debug-assertions = true\n"),
+        None,
     );
-    git(&src, &["init", "-q"]);
-    git(&src, &["add", "Cargo.toml"]);
-    git(&src, &["commit", "-qm", "weak profile"]);
-    let home = root.join("cargo-home");
-    std::fs::create_dir_all(&home).unwrap();
-    let (code, out) = run(Command::new("bash")
-        .arg(scripts().join("build-cmns.sh"))
-        .args(["--src", src.to_str().unwrap(), "--commit", "HEAD", "--out"])
-        .arg(root.join("out"))
-        .env("CARGO_HOME", &home)
-        .env_remove("RUSTFLAGS")
-        .env_remove("CARGO_ENCODED_RUSTFLAGS"));
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("debug-assertions = true"), "{out}");
     assert!(
@@ -295,6 +310,37 @@ fn only_a_fully_stripped_binary_passes_the_strip_check() {
     let (code, out) = strip_check(&c);
     assert_eq!(code, 1, "{out}");
     assert!(out.contains("neither a Mach-O nor an ELF"), "{out}");
+}
+
+/// `build-cmns.sh` checks the binary cargo left, not only cargo's output.
+/// A stand-in `cargo` "builds" an unstripped binary and prints no strip
+/// warning, as cargo does when stripping fails quietly; the script must
+/// refuse it.
+#[test]
+fn build_cmns_refuses_a_binary_that_is_not_stripped() {
+    let root = scratch("build-cmns-unstripped");
+    let bin = root.join("bin");
+    write(
+        &bin.join("cargo"),
+        r#"#!/bin/sh
+case "$1" in
+  metadata) echo '{"packages": [{"name": "cmns", "version": "0.0.1"}]}' ;;
+  build)
+    t=''
+    while [ $# -gt 0 ]; do [ "$1" = --target ] && t=$2; shift; done
+    mkdir -p "$CARGO_TARGET_DIR/$t/release"
+    printf 'static int f(int x) { return x; }\nint main(int c, char **v) { (void)v; return f(c) - c; }\n' > "$CARGO_TARGET_DIR/main.c"
+    cc -g -O0 "$CARGO_TARGET_DIR/main.c" -o "$CARGO_TARGET_DIR/$t/release/cmns"
+    ;;
+  *) echo "stand-in cargo: unexpected $*" >&2; exit 2 ;;
+esac
+"#,
+    );
+    let (code, out) = run(Command::new("chmod").arg("+x").arg(bin.join("cargo")));
+    assert_eq!(code, 0, "{out}");
+    let (code, out) = build_cmns(&root, GOOD_PROFILE, Some(&bin));
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("binary is not stripped"), "{out}");
 }
 
 // ---- sign-manifest.sh -----------------------------------------------------
