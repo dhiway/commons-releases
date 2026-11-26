@@ -18,15 +18,20 @@
 # 0:0 and dated at the commit time, gzip carries no name or time, and the build
 # paths are remapped (--remap-path-prefix) so the binary does not embed --out
 # or the Cargo home. Whether the binary itself is bit-for-bit reproducible
-# across hosts has not been tested. Nothing is signed here: SHA256SUMS and the manifest are signed on the
-# owner's machine (docs/signing.md).
+# across hosts has not been tested. Nothing is signed here: SHA256SUMS and the
+# manifest are signed on the owner's machine (docs/signing.md).
 #
 # It refuses to run when the release profile is weakened: the workspace's
 # [profile.release] must set lto = true, codegen-units = 1 and strip = true,
 # and no CARGO_PROFILE_RELEASE_*, RUSTFLAGS or CARGO_ENCODED_RUSTFLAGS may be
-# set. It fails when cargo reports that stripping failed, which cargo treats
-# as a warning (seen on 2026-11-26 with this Mac's 1.99.0 toolchain, whose
-# rust-objcopy cannot find libLLVM.dylib).
+# set. It fails when cargo reports that stripping failed. Cargo treats that
+# only as a warning and leaves the binary unstripped. On aarch64-apple-darwin
+# since Rust 1.98, the toolchain's rust-objcopy cannot load libLLVM.dylib
+# (rust-lang/rust#164063; the fix, #164134, is in no released stable yet), so
+# on a Mac run this with DYLD_FALLBACK_LIBRARY_PATH="$(rustc --print sysroot)/lib".
+# The App's release script is the precedent: commons-app/scripts/release-macos.sh
+# explains the workaround at :121-126 and sets it at :132. What this script adds
+# is the failure when the warning appears.
 #
 # Hosts: aarch64-apple-darwin builds on a Mac; x86_64-unknown-linux-musl builds
 # on an x86_64 Linux host with `rustup target add x86_64-unknown-linux-musl`
