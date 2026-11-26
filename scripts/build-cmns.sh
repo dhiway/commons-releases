@@ -27,15 +27,36 @@
 # set. It fails when cargo reports that stripping failed. Cargo treats that
 # only as a warning and leaves the binary unstripped. On aarch64-apple-darwin
 # since Rust 1.98, the toolchain's rust-objcopy cannot load libLLVM.dylib
-# (rust-lang/rust#164063; the fix, #164134, is in no released stable yet), so
-# on a Mac run this with DYLD_FALLBACK_LIBRARY_PATH="$(rustc --print sysroot)/lib".
-# The App's release script is the precedent: commons-app/scripts/release-macos.sh
-# explains the workaround at :121-126 and sets it at :132. What this script adds
-# is the failure when the warning appears.
+# (rust-lang/rust#164063; the fix, #164134, is in no released stable yet).
+# On a Mac this script therefore sets
+# DYLD_FALLBACK_LIBRARY_PATH="$(rustc --print sysroot)/lib" itself. The caller
+# cannot set it: macOS removes DYLD_* variables when a protected binary starts,
+# and this script starts through /usr/bin/env. The App's release script is the
+# precedent: commons-app/scripts/release-macos.sh explains the workaround at
+# :121-126 and sets it inside its own command at :132. What this script adds is
+# the failure when the warning appears anyway.
 #
-# Hosts: aarch64-apple-darwin builds on a Mac; x86_64-unknown-linux-musl builds
-# on an x86_64 Linux host with `rustup target add x86_64-unknown-linux-musl`
-# and `musl-gcc` (the musl-tools package), because `ring` compiles C.
+# Scope, as of 2026-11-26:
+# - It has produced the aarch64-apple-darwin archive, on the owner's Mac.
+# - The linux-musl branch is written but has never run: it needs an x86_64
+#   Linux host with `rustup target add x86_64-unknown-linux-musl` and
+#   `musl-gcc` (the musl-tools package), because `ring` compiles C.
+# - The AWS builder cannot run this script or build a musl target. It runs
+#   only fixed cargo commands, so the most it can prove is that the release
+#   build compiles there, for the host target x86_64-unknown-linux-gnu
+#   (glibc), with no archive:
+#
+#     python3.13 commons-services/deploy/aws/builder/builder.py run \
+#       --task <task id> --owner <agent> --repo <commons-cli worktree> \
+#       --commit <sha> --cargo "build --release -p cmns --bin cmns" \
+#       --log-dir <new empty dir> --fetch --wait 300
+#
+#   Prerequisite: the commit must pin commons-node-client at its https://
+#   URL. The builder never fetches on the instance. --fetch runs
+#   `cargo fetch --locked` on the caller's machine and ships that Cargo home.
+#   The builder adds --locked --offline itself, and check_credential_free
+#   refuses a Cargo home whose git/db/*/config names a URL with a user part,
+#   which an ssh://git@ pin leaves behind. docs/building.md has the details.
 set -euo pipefail
 
 die() { echo "build-cmns: $*" >&2; exit 1; }
@@ -102,6 +123,11 @@ VERSION=$(cargo metadata --no-deps --format-version 1 ${OFFLINE[@]+"${OFFLINE[@]
   | python3 -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"]=="cmns"))')
 RUSTC_V=$(rustc -V)
 echo "build-cmns: cmns $VERSION at $SHA, $PROFILE_LINE, $RUSTC_V"
+if [ "$HOST_FAMILY" = darwin ]; then
+  # rust-objcopy's libLLVM.dylib, see the header; cargo and rustc pass it on.
+  DYLD_FALLBACK_LIBRARY_PATH="$(rustc --print sysroot)/lib"
+  export DYLD_FALLBACK_LIBRARY_PATH
+fi
 
 for t in "${TARGETS[@]}"; do
   CC_VAR="CC_${t//-/_}"
