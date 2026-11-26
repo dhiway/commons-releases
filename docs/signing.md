@@ -87,12 +87,17 @@ Commit `keys/stable-1.pub` and `keys/stable-2.pub`.
      scripts/sign-manifest.sh stable ~/.ssh/commons-releases-stable-1 <assets-dir>
    ```
 
-   This runs
+   It first compares `sequence` with the manifest committed at `HEAD`, the
+   last one published, and stops before signing if it was not raised, so no
+   touch is wasted. Then it runs
    `/opt/homebrew/bin/ssh-keygen -Y sign -f ~/.ssh/commons-releases-stable-1 -n commons-release-manifest stable/manifest.json`,
    which asks for the PIN and a touch and writes `stable/manifest.json.sig`.
-   It then runs `commons-release-verify` with `keys/stable-*.pub`, checking
-   the assets in `<assets-dir>` as well. If the verification fails, it
-   removes the signature.
+   It then runs `commons-release-verify` with `keys/stable-*.pub` (see
+   [Rotating a key](#rotating-a-key) for three key files), with
+   `--last-sequence` one above the committed sequence, checking the assets in
+   `<assets-dir>` as well. If the verification fails, it removes the
+   signature. The key and the assets directory may be given relative to the
+   directory you run it from.
 4. Commit `stable/manifest.json` and `stable/manifest.json.sig` together, and
    do not touch the manifest again.
 
@@ -159,6 +164,15 @@ Clients built today carry both.
   it from the second slot. In the next client release, the next key becomes
   `current`, and a newly created key (`<channel>-3`) becomes `next`. Once no
   supported client carries the old key, delete its `.pub` file from `keys/`.
+
+  Until then `keys/` holds three files, and `sign-manifest.sh` accepts that.
+  It reads the files as numbered keys and treats each two consecutive
+  numbers as the pair one generation of clients carries: with keys 1, 2 and
+  3, older clients carry 1 and 2, newer ones 2 and 3. It verifies the new
+  signature once per pair, so it accepts a signature only if every client
+  still served would. With three files that is key 2 alone; signing with key
+  3 too early, or with key 1 too late, is refused and the signature removed.
+  A file in `keys/` not named `<channel>-<number>.pub` is refused.
 - **A lost or compromised key.** Sign with the next key at once, and release
   clients that no longer trust the old one. A client that still trusts a
   compromised key stays at risk until it updates: neither `expires` nor

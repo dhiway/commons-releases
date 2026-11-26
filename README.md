@@ -17,10 +17,11 @@ and it never uses the network.
 | `<channel>/manifest.json` | The channel's manifest, schema 1 ([docs/manifest.md](docs/manifest.md)). |
 | `<channel>/manifest.json.sig` | Its detached OpenSSH signature ([docs/signing.md](docs/signing.md)). |
 | `keys/<channel>-<n>.pub` | The public keys clients trust for a channel ([keys/README.md](keys/README.md)). |
-| `examples/` | One example manifest per channel; not live, never signed. |
+| `examples/` | One example manifest per channel (`dev`, `beta`, `stable`); not live, never signed. |
 | `schema/manifest.schema.json` | The manifest's JSON Schema. |
 | `verifier/` | `commons-release-verify`: the offline verifier, a Rust library and command. |
 | `scripts/build-cmns.sh` | The release build of `cmns` archives ([docs/building.md](docs/building.md)). |
+| `scripts/check-release-profile.py`, `scripts/check-stripped.sh` | The release-profile and stripped-binary checks `build-cmns.sh` runs. |
 | `scripts/sign-manifest.sh` | Signs a channel's manifest and verifies the result. |
 
 No channel directory exists yet: nothing has been released.
@@ -33,9 +34,10 @@ No channel directory exists yet: nothing has been released.
 
 Every release on every channel is built with the optimised release profile
 (`lto`, one codegen unit, stripped); the manifest records it in each set's
-`build_profile`, and the verifier rejects a set whose profile is not a
-release one. Assets are built on the AWS builders, reproducibly, and the
-manifest that lists them is signed on the owner's machine. Building the macOS
+`build_profile`, and the verifier rejects a set whose profile is not exactly
+the one `scripts/build-cmns.sh` records after checking the whole profile.
+Assets are built on the AWS builders, reproducibly, and the manifest that
+lists them is signed on the owner's machine. Building the macOS
 assets needs a macOS host, which the Linux builders are not.
 
 Where that stands today (2026-11-26): `build-cmns.sh` has run only on the

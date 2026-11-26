@@ -14,12 +14,27 @@ It signs nothing. The signer checks `SHA256SUMS` and signs the manifest
 
 ## What it refuses
 
-- A `[profile.release]` that does not set `lto = true`, `codegen-units = 1`
-  and `strip = true`, and any `CARGO_PROFILE_RELEASE_*`, `RUSTFLAGS` or
-  `CARGO_ENCODED_RUSTFLAGS` in the environment (owner ruling, 2026-11-20:
-  every release is an optimised build).
+- A release profile that is not the optimised one (owner ruling,
+  2026-11-20: every release is an optimised build).
+  `scripts/check-release-profile.py` parses the exported tree's `Cargo.toml`
+  as TOML and refuses a `[profile.release]` that does not set `lto = true`,
+  `codegen-units = 1` and `strip = true`; that sets `opt-level` to anything
+  but 3, or turns on `debug-assertions` or `overflow-checks`; or that has any
+  `[profile.release.package.<name>]` override. It also refuses a
+  `profile.release` in any Cargo config file cargo would read: `.cargo/config.toml`
+  or `.cargo/config` in the tree and each of its parents, and `config.toml`
+  or `config` in the Cargo home. The script itself refuses any
+  `CARGO_PROFILE_RELEASE_*`, `RUSTFLAGS` or `CARGO_ENCODED_RUSTFLAGS` in the
+  environment. Only after these checks does it record the build profile, as
+  the one string the verifier accepts:
+  `release: lto=true, codegen-units=1, strip=true`.
+- A binary that is not stripped, judged from the binary itself by
+  `scripts/check-stripped.sh`: on a Mac (`otool`, `nm`), no `__DWARF`
+  segment, no `__debug_*` section, no debug-map (stab) entry and no local
+  symbol; on Linux (`readelf`), no `.debug_*` section and no `.symtab`.
 - A build in which cargo reports that stripping failed. Cargo reports this
-  only as a warning.
+  only as a warning, and the binary check above would also catch it; the
+  warning is kept as the clearer message.
 - A target that is not native to the host's operating system. The darwin
   targets build on a Mac, and the `linux-musl` targets on Linux.
 - A non-empty `--out`.
@@ -47,6 +62,10 @@ scripts/build-cmns.sh --src ../commons-cli --commit <sha> --out dist/cmns-<sha>
 
 Add `--offline` when the host has no network and the Cargo home already holds
 every dependency.
+
+The profile check needs Python 3.11 or later, for `tomllib`. On a Mac,
+Apple's `/usr/bin/python3` is 3.9: put Homebrew's first on `PATH`. With an
+older Python the check refuses to run, and so does the build.
 
 ### The darwin toolchain cannot strip without help
 
@@ -180,7 +199,7 @@ python3.13 $B status --task <task id>    # must list no builder at the end
 ```
 
 That proves the release-profile `cmns` builds on the builder from the
-committed tree, offline. `$LOGS/cargo-1.log` holds cargo's output and
+committed tree, offline. `$LOGS/cargo-0.log` holds cargo's output and
 `$LOGS/manifest.json` the toolchain and isolation record. If it fails, record
 the exact command and error.
 

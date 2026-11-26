@@ -27,9 +27,16 @@
 #
 # It refuses to run when the release profile is weakened: the workspace's
 # [profile.release] must set lto = true, codegen-units = 1 and strip = true,
+# must not lower opt-level from 3 or turn on debug-assertions or
+# overflow-checks, and must have no [profile.release.package.*] override; no
+# Cargo config file may set profile.release (scripts/check-release-profile.py);
 # and no CARGO_PROFILE_RELEASE_*, RUSTFLAGS or CARGO_ENCODED_RUSTFLAGS may be
-# set. It fails when cargo reports that stripping failed. Cargo treats that
-# only as a warning and leaves the binary unstripped. On aarch64-apple-darwin
+# set. Only then does it record the build profile, as the one string the
+# verifier accepts.
+#
+# It fails when the binary is not stripped, read from the binary itself
+# (scripts/check-stripped.sh), and when cargo reports that stripping failed.
+# Cargo treats that only as a warning and leaves the binary unstripped. On aarch64-apple-darwin
 # since Rust 1.98, the toolchain's rust-objcopy cannot load libLLVM.dylib
 # (rust-lang/rust#164063; the fix, #164134, is in no released stable yet).
 # On a Mac this script therefore sets
@@ -66,6 +73,7 @@
 set -euo pipefail
 
 die() { echo "build-cmns: $*" >&2; exit 1; }
+SCRIPTS=$(cd "$(dirname "$0")" && pwd)
 
 SRC='' COMMIT='' OUT='' NOTE=''
 OFFLINE=()
@@ -112,11 +120,10 @@ OUT=$(cd "$OUT" && pwd)
 mkdir "$OUT/src"
 git -C "$SRC" archive --format=tar "$SHA" | tar -x -C "$OUT/src"
 
-PROFILE=$(awk '/^\[/{s=($0=="[profile.release]")} s&&/^[a-z-]+ *=/' "$OUT/src/Cargo.toml")
-echo "$PROFILE" | grep -Eq '^lto *= *(true|"fat")' || die "[profile.release] does not set lto = true"
-echo "$PROFILE" | grep -Eq '^codegen-units *= *1$' || die "[profile.release] does not set codegen-units = 1"
-echo "$PROFILE" | grep -Eq '^strip *= *(true|"symbols")' || die "[profile.release] does not set strip = true"
-PROFILE_LINE="release: $(echo "$PROFILE" | sed 's/ *= */=/' | paste -sd, - | sed 's/,/, /g')"
+python3 "$SCRIPTS/check-release-profile.py" "$OUT/src" || die "the release profile is not the optimised one (above)"
+# The verifier accepts exactly this string (RELEASE_PROFILE in
+# verifier/src/manifest.rs); the check above is what makes it true.
+PROFILE_LINE="release: lto=true, codegen-units=1, strip=true"
 
 cd "$OUT/src"
 export CARGO_TARGET_DIR="$OUT/target"
@@ -150,6 +157,7 @@ for t in "${TARGETS[@]}"; do
   fi
   BIN="$OUT/target/$t/release/cmns"
   [ -x "$BIN" ] || die "no binary at $BIN"
+  "$SCRIPTS/check-stripped.sh" "$BIN" || die "the $t binary is not stripped; the release profile was not applied"
   for p in "$OUT/" "$HOME/"; do
     ! LC_ALL=C grep -qaF "$p" "$BIN" || die "the $t binary still names $p (a build path was not remapped)"
   done
