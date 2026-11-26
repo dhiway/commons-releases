@@ -41,7 +41,9 @@
 # the failure when the warning appears anyway.
 #
 # Scope, as of 2026-11-26:
-# - It has produced the aarch64-apple-darwin archive, on the owner's Mac.
+# - It has produced one aarch64-apple-darwin archive, on the owner's Mac, from
+#   commons-cli 667ba2b (an unreviewed head; a proof, not a release).
+#   docs/building.md lists the runs, including the two that failed.
 # - The linux-musl branch is written but has never run: it needs an x86_64
 #   Linux host with `rustup target add x86_64-unknown-linux-musl` and
 #   `musl-gcc` (the musl-tools package), because `ring` compiles C.
@@ -53,7 +55,7 @@
 #     python3.13 commons-services/deploy/aws/builder/builder.py run \
 #       --task <task id> --owner <agent> --repo <commons-cli worktree> \
 #       --commit <sha> --cargo "build --release -p cmns --bin cmns" \
-#       --log-dir <new empty dir> --fetch --wait 300
+#       --log-dir <new empty dir> --cargo-home <new empty dir> --fetch --wait 1500
 #
 #   Prerequisite: the commit must pin commons-node-client at its https://
 #   URL. The builder never fetches on the instance. --fetch runs

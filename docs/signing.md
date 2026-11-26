@@ -122,8 +122,33 @@ scripts/sign-manifest.sh beta "$RUNNER_TEMP/beta-key"
 rm -f "$RUNNER_TEMP/beta-key"
 ```
 
-No workflow file exists yet. This repository has no remote, and the job
-needs the environment and the secret first.
+No workflow file exists yet. The job needs the environment and the secret
+first, which the owner creates on the GitHub repository.
+
+## The owner: signing `dev` until the CI job exists
+
+Until then, the owner signs `dev` on their own machine with a `dev-1` key file
+that stays there, protected by a passphrase. Create it once:
+
+```sh
+ssh-keygen -t ed25519 -C "commons-releases dev-1" -f ~/.ssh/commons-releases-dev-1
+cp ~/.ssh/commons-releases-dev-1.pub keys/dev-1.pub    # commit this file
+```
+
+Then follow steps 1, 2 and 4 of signing `stable`, with `dev/manifest.json`.
+Step 3 becomes:
+
+```sh
+scripts/sign-manifest.sh dev ~/.ssh/commons-releases-dev-1 <assets-dir>
+```
+
+That runs
+`ssh-keygen -Y sign -f ~/.ssh/commons-releases-dev-1 -n commons-release-manifest dev/manifest.json`,
+which asks for the key's passphrase and writes `dev/manifest.json.sig`. The
+script then verifies the result against `keys/dev-*.pub` and the assets. Any
+`ssh-keygen` will do for a key file: Apple's lacks only FIDO support. When the
+CI job takes over, move the key into the `release-dev` environment's secret
+as described above, and delete it from the machine.
 
 ## Rotating a key
 

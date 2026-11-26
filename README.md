@@ -27,8 +27,7 @@ No channel directory exists yet: nothing has been released.
 
 ## Channel policy
 
-- **`dev`**: the only channel until the owner declares the first release. It
-  lives while this repository is private, so nothing is published early.
+- **`dev`**: the only channel until the owner declares the first release.
 - **`beta`**: every public release is a `beta` until everything is released.
 - **`stable`**: does not exist before then.
 
@@ -37,8 +36,21 @@ Every release on every channel is built with the optimised release profile
 `build_profile`, and the verifier rejects a set whose profile is not a
 release one. Assets are built on the AWS builders, reproducibly, and the
 manifest that lists them is signed on the owner's machine. Building the macOS
-assets needs a macOS host, which the Linux builders are not; see
-[docs/building.md](docs/building.md).
+assets needs a macOS host, which the Linux builders are not.
+
+Where that stands today (2026-11-26): `build-cmns.sh` has run only on the
+owner's Mac, for `aarch64-apple-darwin`. It has produced one kept archive:
+stripped, with no build-host paths. That archive came from commons-cli
+`667ba2b`, an **unreviewed** work-branch head, so it proves the script and is
+not a release. Its `BUILD-INFO.json` says so. Two earlier attempts were
+refused or discarded. At `6e94254` cargo could not strip the binary, and the
+script refused it. A first `667ba2b` archive was stripped, but it named the
+build host's home directory in standard-library paths, which the script now
+remaps and checks for. On the AWS builder, the release build of `cmns`
+compiles offline from the same commit. But the builder cannot run this
+script, makes no archive, and builds a glibc binary, not the musl one.
+[docs/building.md](docs/building.md) says what has run where and what the
+builder still lacks.
 
 ## The set rule
 
@@ -80,3 +92,22 @@ other error. The checks, in order: `signature`, `schema`, `channel`,
 `published`, `expires`, `sequence`, `set-version`, then `asset-size` and
 `asset-sha256` for each asset found in `--assets` (and `assets-absent` if that
 directory holds none of them).
+
+## The verifier is a pinned interface
+
+`cmns` does not repeat these checks. It depends on the `commons-release-verify`
+library from this repository, over `https://` at a full commit, so a change to
+the library's public interface breaks `cmns` at its next pin. That interface is
+listed in the crate documentation (`verifier/src/lib.rs`) and exercised the
+way a client uses it by `verifier/tests/client.rs`:
+
+- `PublicKey::read_file` and `PublicKey::from_key_text` read a key;
+  `TrustedKeys { current, next }` holds a channel's two slots.
+- `verify(bytes, signature, &Options { keys, now, channel, last_sequence,
+  assets_dir })` returns `Verified`, or `Error::Failed { check, detail }`
+  with a `Check` to match on (`Check::as_str` is the name printed above), or
+  `Error::Io`.
+- `Verified::manifest.sets` gives each set's `format_change`,
+  `requires_data_dir` and `components.cmns`, `.node` and `.app`, each with
+  `version`, `commit` and `assets` keyed by target triple (`url`, `sha256`,
+  `size`).
