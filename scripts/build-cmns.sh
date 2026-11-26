@@ -19,8 +19,9 @@
 # and packs `cmns-<version>-<target>.tar.gz` holding `cmns` and BUILD-INFO.json.
 # The archive adds nothing that varies between runs: entries are owned by
 # 0:0 and dated at the commit time, gzip carries no name or time, and the build
-# paths are remapped (--remap-path-prefix) so the binary does not embed --out
-# or the Cargo home. Whether the binary itself is bit-for-bit reproducible
+# paths are remapped (--remap-path-prefix) so the binary does not embed --out,
+# the Cargo home or the toolchain's directory; the script fails if the binary
+# still names --out or $HOME. Whether the binary itself is bit-for-bit reproducible
 # across hosts has not been tested. Nothing is signed here: SHA256SUMS and the
 # manifest are signed on the owner's machine (docs/signing.md).
 #
@@ -118,10 +119,12 @@ PROFILE_LINE="release: $(echo "$PROFILE" | sed 's/ *= */=/' | paste -sd, - | sed
 cd "$OUT/src"
 export CARGO_TARGET_DIR="$OUT/target"
 # Keep build paths out of the binary. The separator is 0x1f, so paths with
-# spaces survive.
-CARGO_ENCODED_RUSTFLAGS=$(printf '%s\037%s' \
+# spaces survive. The sysroot is remapped too: with rust-src installed, the
+# standard library's panic locations name the toolchain's directory.
+CARGO_ENCODED_RUSTFLAGS=$(printf '%s\037%s\037%s' \
   "--remap-path-prefix=$OUT/src=/build/cmns" \
-  "--remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo")
+  "--remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo" \
+  "--remap-path-prefix=$(rustc --print sysroot)=/rust")
 export CARGO_ENCODED_RUSTFLAGS
 VERSION=$(cargo metadata --no-deps --format-version 1 ${OFFLINE[@]+"${OFFLINE[@]}"} \
   | python3 -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"]=="cmns"))')
@@ -145,6 +148,9 @@ for t in "${TARGETS[@]}"; do
   fi
   BIN="$OUT/target/$t/release/cmns"
   [ -x "$BIN" ] || die "no binary at $BIN"
+  for p in "$OUT/" "$HOME/"; do
+    ! LC_ALL=C grep -qaF "$p" "$BIN" || die "the $t binary still names $p (a build path was not remapped)"
+  done
   if [ "$t" = "$DEFAULT" ]; then
     # The binary must report the version the archive is named for.
     "$BIN" version | python3 -c 'import json,sys; v=json.load(sys.stdin)["cmns"]; sys.exit(0 if v==sys.argv[1] else "cmns reports "+v+", expected "+sys.argv[1])' "$VERSION"
