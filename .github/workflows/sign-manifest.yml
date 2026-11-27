@@ -1,0 +1,228 @@
+name: sign-manifest
+
+# Signs one channel's manifest with that channel's CI key, on a GitHub-hosted
+# runner and never on an AWS builder (owner ruling 2026-11-26). CI signs `dev`
+# and `beta`; `stable` is signed only on the owner's hardware token.
+#
+# The key exists only as an environment secret, and the environment requires
+# the owner's approval, so no run reaches the key without it. See
+# docs/signing.md, "CI: signing dev and beta".
+#
+# scripts/sign-manifest.sh refuses a working-tree sequence that is not higher
+# than the one committed at HEAD, so the manifest to sign cannot already be on
+# main. The job therefore takes the manifest from a pull request, runs
+# everything else from main, and puts the signature on the pull request's
+# branch.
+#
+# What the job trusts is deliberately narrow: the pull request may change
+# exactly one path, <channel>/manifest.json, and nothing else. In particular it
+# may not touch scripts/ (which runs beside the key) or keys/ (which decides
+# what a signature must verify against).
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Channel to sign. CI signs dev and beta only."
+        required: true
+        type: choice
+        options:
+          - dev
+          - beta
+      pr:
+        description: "Number of the pull request that carries the new manifest"
+        required: true
+        type: string
+      sha:
+        description: "The pull request head commit you reviewed (40 hex digits)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: sign-manifest-${{ inputs.channel }}
+  cancel-in-progress: false
+
+jobs:
+  sign:
+    # The workflow file a dispatch runs comes from the ref that was dispatched,
+    # so this guard only holds for the copy in main; the environment's branch
+    # policy (main only) is what holds in the repository's settings.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: release-${{ inputs.channel }}
+    env:
+      CHANNEL: ${{ inputs.channel }}
+      REPO: ${{ github.repository }}
+      PR: ${{ inputs.pr }}
+      SHA: ${{ inputs.sha }}
+    steps:
+      - name: Refuse a channel CI must not sign
+        run: |
+          case "$CHANNEL" in
+            dev|beta) ;;
+            *) echo "refusing: CI signs dev and beta only, not '$CHANNEL'" >&2; exit 1 ;;
+          esac
+          case "$PR" in
+            ''|*[!0-9]*) echo "refusing: '$PR' is not a pull request number" >&2; exit 1 ;;
+          esac
+          case "$SHA" in
+            *[!0-9a-f]*|'') echo "refusing: '$SHA' is not a full commit SHA (40 lowercase hex digits)" >&2; exit 1 ;;
+          esac
+          [ ${#SHA} -eq 40 ] || { echo "refusing: '$SHA' is not a full commit SHA (40 lowercase hex digits)" >&2; exit 1; }
+
+      - name: Fetch main and the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$REPO/pulls/$PR" --jq .head.repo.full_name)" = "$REPO" || {
+            echo "refusing: pull request $PR comes from a fork; signing runs only for branches of this repository" >&2
+            exit 1
+          }
+          test "$(gh api "repos/$REPO/pulls/$PR" --jq .base.ref)" = main || {
+            echo "refusing: pull request $PR does not target main" >&2
+            exit 1
+          }
+          # The branch name comes from the API and is used as a push ref, so it
+          # is checked before it reaches the environment file or the shell.
+          ref=$(gh api "repos/$REPO/pulls/$PR" --jq .head.ref)
+          [ "$ref" != main ] || { echo "refusing: pull request $PR has main as its head" >&2; exit 1; }
+          case "$ref" in
+            ''|*[!A-Za-z0-9._/-]*)
+              echo "refusing: branch name '$ref' holds characters a ref of this job cannot use" >&2
+              exit 1 ;;
+          esac
+          case "$ref" in
+            *..*|/*|*/|-*|*.lock)
+              echo "refusing: branch name '$ref' is not a plain branch path" >&2
+              exit 1 ;;
+          esac
+          echo "HEAD_REF=$ref" >> "$GITHUB_ENV"
+          git init -q .
+          git remote add origin "https://github.com/$REPO.git"
+          # The token is a per-command URL override, so it is never written to
+          # .git/config and no later step, such as a dependency's build script,
+          # can find it there.
+          AUTH="url.https://x-access-token:$GH_TOKEN@github.com/.insteadOf=https://github.com/"
+          # Full history of these two refs, because the changed-file check needs
+          # the merge base. The repository is small; a shallow fetch would make
+          # the base unknowable and force the check onto the live API.
+          git -c "$AUTH" fetch -q --no-tags origin main
+          git -c "$AUTH" fetch -q --no-tags origin "refs/pull/$PR/head"
+          fetched=$(git rev-parse FETCH_HEAD)
+          test "$fetched" = "$SHA" || {
+            echo "refusing: pull request $PR is at $fetched, not at the reviewed commit $SHA; the content to sign must be the content reviewed" >&2
+            exit 1
+          }
+          echo "PR_HEAD=$fetched" >> "$GITHUB_ENV"
+
+      - name: The pull request may change one manifest and nothing else
+        run: |
+          set -euo pipefail
+          base=$(git merge-base origin/main "$PR_HEAD")
+          changed=$(git diff --no-renames --name-only "$base" "$PR_HEAD" | sort)
+          echo "pull request $PR changes, against $base:"; printf '%s\n' "$changed"
+          if [ "$changed" != "$CHANNEL/manifest.json" ]; then
+            echo "refusing: a signing run takes exactly $CHANNEL/manifest.json from the pull request, nothing else" >&2
+            exit 1
+          fi
+          # A path check alone would let the pull request put a symlink there.
+          mode=$(git ls-tree "$PR_HEAD" -- "$CHANNEL/manifest.json" | cut -d' ' -f1)
+          test "$mode" = 100644 || {
+            echo "refusing: $CHANNEL/manifest.json is mode $mode at $PR_HEAD, not a regular file (100644)" >&2
+            exit 1
+          }
+
+      - name: Lay main out with that manifest in place
+        run: |
+          set -euo pipefail
+          git checkout -q -B main origin/main
+          # Written from the object, not checked out, so a symlink cannot reach
+          # the signing step even if the mode check above were bypassed.
+          mkdir -p "$CHANNEL"
+          git show "$PR_HEAD:$CHANNEL/manifest.json" > "$CHANNEL/manifest.json"
+          test -f "$CHANNEL/manifest.json" && [ ! -L "$CHANNEL/manifest.json" ] || {
+            echo "refusing: $CHANNEL/manifest.json is not a regular file after the overlay" >&2
+            exit 1
+          }
+          changed=$(git status --porcelain --untracked-files=all)
+          case "$changed" in
+            "?? $CHANNEL/manifest.json"|" M $CHANNEL/manifest.json") ;;
+            '')
+              echo "refusing: the pull request's $CHANNEL/manifest.json is identical to main's; there is nothing to sign" >&2
+              exit 1 ;;
+            *)
+              echo "refusing: expected only $CHANNEL/manifest.json to differ from main, found:" >&2
+              printf '%s\n' "$changed" >&2
+              exit 1 ;;
+          esac
+          echo "the manifest about to be signed:"
+          echo "  file    $CHANNEL/manifest.json"
+          echo "  sha256  $(sha256sum "$CHANNEL/manifest.json" | cut -d' ' -f1)"
+          echo "  from    $PR_HEAD (pull request #$PR)"
+          for k in keys/"$CHANNEL"-*.pub; do echo "  key     $(ssh-keygen -lf "$k")"; done
+
+      # After the checkout: the verifier is built from main's tree, not from an
+      # empty directory.
+      - name: Build the verifier from main
+        run: |
+          set -euo pipefail
+          cargo build -q --locked --release -p commons-release-verify
+          echo "COMMONS_RELEASE_VERIFY=$PWD/target/release/commons-release-verify" >> "$GITHUB_ENV"
+
+      - name: Sign dev
+        if: inputs.channel == 'dev'
+        env:
+          SIGNING_KEY: ${{ secrets.RELEASES_DEV_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f "$RUNNER_TEMP/key"' EXIT
+          printf '%s\n' "$SIGNING_KEY" > "$RUNNER_TEMP/key"
+          chmod 600 "$RUNNER_TEMP/key"
+          scripts/sign-manifest.sh "$CHANNEL" "$RUNNER_TEMP/key"
+          cp "$CHANNEL/manifest.json.sig" "$RUNNER_TEMP/manifest.json.sig"
+
+      - name: Sign beta
+        if: inputs.channel == 'beta'
+        env:
+          SIGNING_KEY: ${{ secrets.RELEASES_BETA_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f "$RUNNER_TEMP/key"' EXIT
+          printf '%s\n' "$SIGNING_KEY" > "$RUNNER_TEMP/key"
+          chmod 600 "$RUNNER_TEMP/key"
+          scripts/sign-manifest.sh "$CHANNEL" "$RUNNER_TEMP/key"
+          cp "$CHANNEL/manifest.json.sig" "$RUNNER_TEMP/manifest.json.sig"
+
+      - name: Put the signature on the pull request branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # The file signed must be exactly the object the pull request holds.
+          test "$(git hash-object "$CHANNEL/manifest.json")" = \
+               "$(git rev-parse "$PR_HEAD:$CHANNEL/manifest.json")" || {
+            echo "refusing: the file signed is not the pull request's manifest object" >&2
+            exit 1
+          }
+          # Remove the working-tree overlay so switching to the pull request
+          # branch cannot trip over it; that branch already holds the object.
+          rm -f "$CHANNEL/manifest.json"
+          rmdir "$CHANNEL" 2>/dev/null || true
+          git checkout -q -B signed "$PR_HEAD"
+          mkdir -p "$CHANNEL"
+          cp "$RUNNER_TEMP/manifest.json.sig" "$CHANNEL/manifest.json.sig"
+          git add -- "$CHANNEL/manifest.json.sig"
+          git -c user.name="commons-releases signing job" \
+              -c user.email="noreply@dhiway.com" \
+              commit -q -m "sign-manifest: signature for the $CHANNEL manifest in pull request #$PR"
+          git push -q "https://x-access-token:$GH_TOKEN@github.com/$REPO.git" "HEAD:refs/heads/$HEAD_REF"
+          echo "signed $CHANNEL manifest, sequence $(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sequence"])' "$CHANNEL/manifest.json")"

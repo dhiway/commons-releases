@@ -106,54 +106,69 @@ Re-sign before `expires` even when nothing changed: raise `sequence`, update
 
 ## CI: signing `dev` and `beta`
 
-The key is created once on the owner's machine, never on a builder:
+CI signs `dev` and `beta` with `.github/workflows/sign-manifest.yml`, on a
+GitHub-hosted runner, never on an AWS builder. `stable` is not in that
+workflow: it is signed only on the owner's hardware token.
 
-```sh
-ssh-keygen -t ed25519 -N '' -C "commons-releases beta-1 (CI)" -f beta-1
-```
-
-`beta-1.pub` goes to `keys/beta-1.pub`. The contents of `beta-1` go into a
-GitHub Actions secret, `RELEASES_BETA_SIGNING_KEY`, in an environment named
-`release-beta` that requires the owner's approval. Then delete `beta-1` from
-the owner's machine. `dev` is the same with `dev-1`.
-
-The signing job runs in that environment on a GitHub-hosted runner, never on
-an AWS builder:
+The keys were generated once, on the owner's machine and never on a builder:
 
 ```sh
 umask 077
-printf '%s\n' "$RELEASES_BETA_SIGNING_KEY" > "$RUNNER_TEMP/beta-key"
-scripts/sign-manifest.sh beta "$RUNNER_TEMP/beta-key"
-rm -f "$RUNNER_TEMP/beta-key"
+/opt/homebrew/bin/ssh-keygen -t ed25519 -N '' -C "commons-releases dev-1 (CI)"  -f dev-1
+/opt/homebrew/bin/ssh-keygen -t ed25519 -N '' -C "commons-releases beta-1 (CI)" -f beta-1
 ```
 
-No workflow file exists yet. The job needs the environment and the secret
-first, which the owner creates on the GitHub repository.
+The public halves are committed at `keys/dev-1.pub` and `keys/beta-1.pub`. The
+private halves exist only as the GitHub Actions secrets
+`RELEASES_DEV_SIGNING_KEY` and `RELEASES_BETA_SIGNING_KEY`, in the
+environments `release-dev` and `release-beta`, which require the owner's
+approval before a job may use them. The private key files were then deleted
+from the owner's machine; a private key exists in no checkout. If a secret is
+lost, generate the next key as a planned rotation (below); never weaken the
+check to recover from it.
 
-## The owner: signing `dev` until the CI job exists
+### Running the signing job
 
-Until then, the owner signs `dev` on their own machine with a `dev-1` key file
-that stays there, protected by a passphrase. Create it once:
+`scripts/sign-manifest.sh` refuses a working-tree sequence that is not higher
+than the one committed at `HEAD`, so a manifest cannot be signed once it is on
+`main`. The workflow therefore signs from a pull request:
 
-```sh
-ssh-keygen -t ed25519 -C "commons-releases dev-1" -f ~/.ssh/commons-releases-dev-1
-cp ~/.ssh/commons-releases-dev-1.pub keys/dev-1.pub    # commit this file
-```
+1. Open a branch that adds or raises exactly one file,
+   `<channel>/manifest.json`, and nothing else. The job refuses any other
+   change.
+2. Open a pull request for that branch against `main`.
+3. Run **Actions → sign-manifest → Run workflow** on `main` with the channel
+   (`dev` or `beta`), the pull request number, and the head commit SHA of the
+   branch you reviewed, then approve the environment when GitHub asks. The
+   job runs only from `main`: the environments name `main` as the only branch
+   a deployment may come from, and the workflow itself refuses any other ref.
+   The head commit is what binds the approval to the content: the job fetches
+   the pull request, refuses unless it is at exactly that commit, and prints
+   the manifest's SHA-256 in the log before signing it.
+4. The job checks out `main`, applies only that manifest to the working tree,
+   signs it with the channel's key from the environment secret, and pushes
+   `<channel>/manifest.json.sig` as a commit on the pull request's branch.
+5. The pull request now holds the manifest and its signature together; merge
+   it. The job never writes to `main`.
 
-Then follow steps 1, 2 and 4 of signing `stable`, with `dev/manifest.json`.
-Step 3 becomes:
+The job refuses a channel other than `dev` or `beta`, a pull request from a
+fork or one that does not target `main`, a pull request that changes any path
+but the one manifest (a rename counts as two paths), a manifest that is not a
+regular file (a symlink), a branch name it cannot use as a ref, and a pull
+request whose head is not the commit given at dispatch. The token it fetches
+and pushes with is used for those commands only; it is never written to the
+checkout's Git configuration. It takes the signing script and the public keys
+it verifies against from `main`, not from the pull request, so the code that
+runs beside the key cannot be changed by the change being signed. The script
+verifies the signature against `keys/<channel>-*.pub` before the job reports
+success.
 
-```sh
-scripts/sign-manifest.sh dev ~/.ssh/commons-releases-dev-1 <assets-dir>
-```
+The manifest's `published` must not be more than an hour ahead of the runner's
+clock, and `expires` must still be in the future, because the verifier checks
+both.
 
-That runs
-`ssh-keygen -Y sign -f ~/.ssh/commons-releases-dev-1 -n commons-release-manifest dev/manifest.json`,
-which asks for the key's passphrase and writes `dev/manifest.json.sig`. The
-script then verifies the result against `keys/dev-*.pub` and the assets. Any
-`ssh-keygen` will do for a key file: Apple's lacks only FIDO support. When the
-CI job takes over, move the key into the `release-dev` environment's secret
-as described above, and delete it from the machine.
+Any `ssh-keygen` will do for a key file: Apple's lacks only FIDO support. The
+job does not need FIDO because `dev` and `beta` are ordinary key files.
 
 ## Rotating a key
 
